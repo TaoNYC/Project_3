@@ -89,8 +89,11 @@ add_bg_from_url()
 
 st.title("Hotel Reservation NFT System")
 
-# Room input details
+# Create blank dataframes for Streamlit
 hotel_price_df = pd.DataFrame()
+selectable_hotel_dict = {}
+
+# Room input details
 city = st.text_input('Which city would you like to search?')
 col1top, col2top = st.columns(2)
 with col1top:
@@ -122,25 +125,39 @@ if st.checkbox('Search'):
     hotel_response = get_hotels(destination_id, checkin_date, checkout_date, adults_number, room_number)
 
 
+# Checkbox to display the dataframe
 if st.checkbox('Display Dataframe'):
     st.text('List Ordered by Popularity')
     hotel_data = hotel_response.json()
-    hotel_list = []
-    price_list = []
 
+    # Create empty lists for json values to be populated in
+    hotel_list = []
+    total_price_list = []
+    average_price_list = []
+    picklist_label = []
+
+    # Loop through all queried hotels in a given page to populate the values in the lists
     i = 0
     while i < 20:
         hotel_list.append(hotel_data['result'][i]['hotel_name'])
-        price_list.append(hotel_data['result'][i]['price_breakdown']['all_inclusive_price'])
+        total_price_list.append(hotel_data['result'][i]['price_breakdown']['all_inclusive_price'])
+        average_price_list.append(hotel_data['result'][i]['composite_price_breakdown']['gross_amount_per_night']['value'])
+        picklist_label.append(hotel_data['result'][i]['hotel_name'] + ' - $' + str(round(hotel_data['result'][i]['composite_price_breakdown']['gross_amount_per_night']['value'],2)) + ' per night - $' + str(round(hotel_data['result'][i]['price_breakdown']['all_inclusive_price'],2)) + ' total cost')
         i += 1
 
-    final_hotel_list = [hotel_list, price_list]
+    # Create the final hotel list as a list of lists
+    final_hotel_list = [hotel_list, average_price_list, total_price_list]
+    selectable_hotel_dict = dict(zip(hotel_list, picklist_label))
 
+    # Create the hotel price dataframe
     hotel_price_df = pd.DataFrame(final_hotel_list).transpose()
-    hotel_price_df.columns = ['Hotel Name', 'Price']
-    hotel_price_df.set_index('Hotel Name')
+    hotel_price_df.columns = ['Hotel Name', 'Average Price', 'Total Price']
+    hotel_price_df = hotel_price_df.set_index('Hotel Name')
 
-st.dataframe(hotel_price_df, 1200)
+# Set chosen values
+chosen_hotel = st.selectbox('Select a Hotel', selectable_hotel_dict, format_func = lambda x: selectable_hotel_dict.get(x))
+chosen_average_price = hotel_price_df.loc[chosen_hotel , 'Average Price']
+chosen_total_price = hotel_price_df.loc[chosen_hotel , 'Total Price']
 
 accounts = w3.eth.accounts
 if st.checkbox("Do you want to Tokenize your Reservation at this time"):
@@ -149,9 +166,9 @@ if st.checkbox("Do you want to Tokenize your Reservation at this time"):
     st.markdown("---")
 
     st.markdown("## Tokenize Hotel Reservation")
-    hotel_name = st.text_input("Enter the name of the Hotel")
+    hotel_name = st.text(chosen_hotel)
+    hotel_room_value = st.text(chosen_total_price)
     hotel_confirmation = st.text_input("Enter the reservation confirmation")
-    hotel_room_value = st.number_input("Enter the price of the hotel room")
     file = st.file_uploader("Upload Confirmation Receipt")
     if st.button("Tokenize Hotel Reservation"):
         # Use the `pin_hotel_reservation` helper function to pin the file to IPFS
@@ -252,4 +269,3 @@ if st.checkbox(
                 )
         else:
             st.write("This reservation token ID has no new pricing")
-
